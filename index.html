@@ -1,0 +1,899 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Demo — Agente de Atendimento por Voz</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
+
+  :root {
+    --ink: #123B3D;
+    --ink-light: #2F6F6B;
+    --paper: #FBF7F0;
+    --paper-dim: #F1EAD9;
+    --text-dark: #1C2422;
+    --text-soft: #5B6664;
+    --accent: #E0932E;
+    --accent-dark: #B8721A;
+    --radius: 18px;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    font-family: 'Manrope', sans-serif;
+    background: transparent;
+    display: flex;
+    justify-content: center;
+    padding: 24px 12px;
+  }
+
+  .telefone {
+    width: 380px;
+    max-width: 100%;
+    background: var(--ink);
+    border-radius: 32px;
+    padding: 10px;
+    box-shadow: 0 24px 60px rgba(18, 59, 61, 0.28);
+  }
+
+  .tela {
+    position: relative;
+    background: var(--paper-dim);
+    border-radius: 24px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    height: 640px;
+  }
+
+  .cabecalho {
+    background: var(--ink);
+    color: var(--paper);
+    padding: 18px 20px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .cabecalho .avatar {
+    width: 38px; height: 38px;
+    border-radius: 50%;
+    background: var(--accent);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; font-weight: 800; color: #2B1B03;
+    flex-shrink: 0;
+  }
+
+  .cabecalho .nome { font-weight: 700; font-size: 15px; letter-spacing: -0.2px; }
+  .cabecalho .status { font-size: 12px; color: #B9D6D3; display: flex; align-items: center; gap: 5px; }
+  .cabecalho .status .ponto { width: 6px; height: 6px; border-radius: 50%; background: #6FE0A8; }
+
+  .corpo {
+    flex: 1;
+    overflow-y: auto;
+    padding: 18px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    scroll-behavior: smooth;
+  }
+  .corpo::-webkit-scrollbar { width: 5px; }
+  .corpo::-webkit-scrollbar-thumb { background: #D8CFB8; border-radius: 8px; }
+
+  .bolha {
+    max-width: 84%;
+    padding: 11px 14px;
+    border-radius: var(--radius);
+    font-size: 13.5px;
+    line-height: 1.48;
+    opacity: 0;
+    transform: translateY(6px);
+    animation: entra 0.32s ease forwards;
+  }
+  @keyframes entra { to { opacity: 1; transform: translateY(0); } }
+
+  /* ---------- fala do usuário (texto ou voz) ---------- */
+  .bolha.user {
+    align-self: flex-end;
+    background: var(--ink-light);
+    color: white;
+    border-bottom-right-radius: 5px;
+  }
+  .bolha.user .selo {
+    display: block;
+    font-size: 10.5px;
+    font-weight: 700;
+    letter-spacing: 0.4px;
+    opacity: 0.8;
+    margin-bottom: 3px;
+  }
+
+  /* ---------- fala do agente: sempre em áudio ---------- */
+  .bolha.bot {
+    align-self: flex-start;
+    background: var(--paper);
+    color: var(--text-dark);
+    border-bottom-left-radius: 5px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    padding: 10px 12px;
+    min-width: 210px;
+  }
+  .audio-linha { display: flex; align-items: center; gap: 10px; }
+
+  .btn-play {
+    width: 34px; height: 34px;
+    border-radius: 50%;
+    border: none;
+    background: var(--ink);
+    color: white;
+    font-size: 13px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .btn-play:hover { background: var(--ink-light); }
+
+  .onda { flex: 1; display: flex; align-items: center; gap: 2px; height: 26px; }
+  .onda i {
+    display: block;
+    width: 3px;
+    border-radius: 2px;
+    background: #B9B0A0;
+    height: var(--h);
+  }
+  .bolha.bot.tocando .onda i {
+    background: var(--ink-light);
+    animation: dança 0.9s infinite ease-in-out;
+    animation-delay: calc(var(--i) * 40ms);
+  }
+  @keyframes dança {
+    0%, 100% { transform: scaleY(0.55); }
+    50% { transform: scaleY(1.25); }
+  }
+
+  .btn-texto {
+    border: none;
+    background: transparent;
+    color: var(--text-soft);
+    font-family: inherit;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    padding: 2px 4px;
+  }
+  .btn-texto:hover { color: var(--ink); }
+
+  .transcricao {
+    display: none;
+    margin-top: 8px;
+    padding-top: 8px;
+    border-top: 1px dashed #DCD3BD;
+    font-size: 12.5px;
+    color: var(--text-soft);
+  }
+  .bolha.bot.aberto .transcricao { display: block; }
+
+  .digitando {
+    align-self: flex-start;
+    display: flex; gap: 4px;
+    padding: 12px 15px;
+    background: var(--paper);
+    border-radius: var(--radius);
+    border-bottom-left-radius: 5px;
+    width: fit-content;
+  }
+  .digitando span {
+    width: 6px; height: 6px; border-radius: 50%;
+    background: #B9B0A0;
+    animation: pulsa 1.1s infinite ease-in-out;
+  }
+  .digitando span:nth-child(2) { animation-delay: 0.15s; }
+  .digitando span:nth-child(3) { animation-delay: 0.3s; }
+  @keyframes pulsa {
+    0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
+    30% { transform: translateY(-4px); opacity: 1; }
+  }
+
+  .bastidor {
+    align-self: flex-start;
+    border: 1.5px dashed #C9BFA4;
+    color: var(--text-soft);
+    font-style: italic;
+    font-size: 12px;
+    padding: 9px 13px;
+    border-radius: var(--radius);
+    max-width: 88%;
+    opacity: 0;
+    animation: entra 0.32s ease forwards;
+  }
+
+  /* ---------- tela de início (precisa de um toque p/ liberar o som) ---------- */
+  .inicio {
+    position: absolute;
+    inset: 0;
+    background: var(--ink);
+    color: var(--paper);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    gap: 14px;
+    padding: 32px;
+    z-index: 5;
+  }
+  .inicio .emoji { font-size: 46px; }
+  .inicio h1 { font-size: 20px; margin: 0; letter-spacing: -0.3px; }
+  .inicio p { font-size: 13px; color: #B9D6D3; margin: 0; line-height: 1.5; }
+  .inicio button {
+    margin-top: 6px;
+    padding: 14px 22px;
+    border-radius: 16px;
+    border: none;
+    background: var(--accent);
+    color: #2B1B03;
+    font-family: inherit;
+    font-weight: 800;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  .inicio button:hover { background: var(--accent-dark); color: white; }
+
+  /* ---------- rodapé: atalhos + texto + microfone ---------- */
+  .rodape {
+    padding: 10px 14px 12px;
+    background: var(--paper);
+    border-top: 1px solid var(--paper-dim);
+  }
+
+  .chips {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    padding-bottom: 8px;
+    scrollbar-width: none;
+  }
+  .chips::-webkit-scrollbar { display: none; }
+  .chip {
+    flex-shrink: 0;
+    background: white;
+    border: 1.5px solid var(--paper-dim);
+    color: var(--ink);
+    font-family: inherit;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 7px 11px;
+    border-radius: 14px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .chip:hover, .chip:focus-visible { background: var(--ink); color: white; border-color: var(--ink); outline: none; }
+
+  .campo-linha { display: flex; gap: 8px; align-items: center; }
+  .campo-linha input {
+    flex: 1;
+    min-width: 0;
+    padding: 11px 14px;
+    border-radius: 20px;
+    border: 1.5px solid var(--paper-dim);
+    font-family: inherit;
+    font-size: 13.5px;
+    outline: none;
+    background: white;
+    color: var(--text-dark);
+  }
+  .campo-linha input:focus { border-color: var(--ink-light); }
+  .campo-linha input:disabled { background: var(--paper-dim); }
+
+  .btn-redondo {
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    border: none;
+    background: var(--ink);
+    color: white;
+    font-size: 16px;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+  .btn-redondo:hover { background: var(--ink-light); }
+  .btn-redondo:disabled { opacity: 0.4; cursor: default; }
+  .btn-mic { background: var(--accent); color: #2B1B03; }
+  .btn-mic:hover { background: var(--accent-dark); color: white; }
+  .btn-mic.gravando { background: #D1493F; color: white; animation: grava 1.1s infinite; }
+  @keyframes grava {
+    0% { box-shadow: 0 0 0 0 rgba(209,73,63,0.5); }
+    70% { box-shadow: 0 0 0 10px rgba(209,73,63,0); }
+    100% { box-shadow: 0 0 0 0 rgba(209,73,63,0); }
+  }
+
+  .cta-final {
+    display: block;
+    width: 100%;
+    padding: 13px;
+    border-radius: 14px;
+    border: none;
+    background: var(--accent);
+    color: #2B1B03;
+    font-family: inherit;
+    font-weight: 800;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  .cta-final:hover { background: var(--accent-dark); color: white; }
+
+  .aviso-demo { text-align: center; font-size: 11px; color: var(--text-soft); padding: 8px 0 0; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .bolha, .bastidor { animation: none; opacity: 1; transform: none; }
+    .digitando span, .bolha.bot.tocando .onda i, .btn-mic.gravando { animation: none; }
+  }
+</style>
+</head>
+<body>
+
+<div class="telefone">
+  <div class="tela">
+    <div class="cabecalho">
+      <div class="avatar" id="avatarInicial">S</div>
+      <div class="info">
+        <div class="nome" id="nomeNegocioHeader">SeuNegócio Atendendo</div>
+        <div class="status"><span class="ponto"></span> online · responde por voz</div>
+      </div>
+    </div>
+
+    <div class="corpo" id="corpo"></div>
+
+    <div class="rodape" id="rodape">
+      <div class="chips" id="chips"></div>
+      <div class="campo-linha">
+        <input type="text" id="campoTexto" placeholder="Digite ou toque no microfone" autocomplete="off" disabled>
+        <button class="btn-redondo btn-mic" id="btnMic" aria-label="Falar" disabled>🎤</button>
+        <button class="btn-redondo" id="btnEnviar" aria-label="Enviar" disabled>➤</button>
+      </div>
+      <div class="aviso-demo" id="avisoRodape">Você pode falar ou digitar — o agente sempre responde em áudio.</div>
+    </div>
+
+    <div class="inicio" id="inicio">
+      <div class="emoji">🔊</div>
+      <h1>Atendimento por voz</h1>
+      <p>Aqui o agente conversa com você em áudio.<br>Ligue o som do aparelho e toque no botão.</p>
+      <button id="btnIniciar">Começar a conversa</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ============================================================
+   CONFIGURAÇÃO — edite só esta seção pra reaproveitar em
+   qualquer campanha/nicho, sem tocar no resto do código.
+   ============================================================ */
+const CONFIG = {
+  nomeNegocio: 'SeuNegócio Atendendo',
+  whatsappDestino: '5548988720983', // só dígitos, com DDI+DDD
+  // Dados fictícios usados nas respostas da demo (servem para qualquer negócio).
+  // Escreva números por extenso nas frases faladas, pra voz ler direito.
+  exemplo: {
+    endereco: 'Rua Exemplo, número cento e vinte e três, no Centro',
+    horario: 'de segunda a sábado, das oito da manhã às seis da tarde',
+    pagamentos: 'Pix, cartão e dinheiro',
+    promocao: 'Leve dois e pague um em itens selecionados',
+  },
+};
+
+document.getElementById('nomeNegocioHeader').textContent = CONFIG.nomeNegocio;
+document.getElementById('avatarInicial').textContent = CONFIG.nomeNegocio.charAt(0).toUpperCase();
+
+const corpo = document.getElementById('corpo');
+const rodape = document.getElementById('rodape');
+const chipsEl = document.getElementById('chips');
+const campo = document.getElementById('campoTexto');
+const btnMic = document.getElementById('btnMic');
+const btnEnviar = document.getElementById('btnEnviar');
+const avisoRodape = document.getElementById('avisoRodape');
+const lead = { nome: '', telefone: '', negocio: '' };
+
+function scrollFim() { corpo.scrollTop = corpo.scrollHeight; }
+
+/* ============================================================
+   SAÍDA DE ÁUDIO — voz do navegador (speechSynthesis, pt-BR)
+   ============================================================ */
+const VOZ_OK = 'speechSynthesis' in window;
+let vozPt = null;
+
+function escolheVoz() {
+  if (!VOZ_OK) return;
+  const vozes = speechSynthesis.getVoices();
+  const pt = vozes.filter(v => /^pt[-_]BR/i.test(v.lang));
+  vozPt = pt.find(v => /google|luciana|francisca|microsoft/i.test(v.name)) || pt[0]
+       || vozes.find(v => /^pt/i.test(v.lang)) || null;
+}
+if (VOZ_OK) {
+  escolheVoz();
+  speechSynthesis.onvoiceschanged = escolheVoz;
+}
+
+function limpaParaFala(t) {
+  return t.replace(/\p{Extended_Pictographic}/gu, '').replace(/\s+/g, ' ').trim();
+}
+
+function falar(texto, bolha) {
+  return new Promise(resolve => {
+    document.querySelectorAll('.bolha.bot.tocando').forEach(b => b.classList.remove('tocando'));
+    if (!VOZ_OK) { setTimeout(resolve, 1500); return; }
+
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(limpaParaFala(texto));
+    u.lang = 'pt-BR';
+    if (vozPt) u.voice = vozPt;
+    u.rate = 1.03;
+
+    let feito = false;
+    const fim = () => {
+      if (feito) return;
+      feito = true;
+      clearTimeout(reserva);
+      if (bolha) bolha.classList.remove('tocando');
+      resolve();
+    };
+    // reserva: alguns navegadores não disparam "onend"
+    const reserva = setTimeout(fim, Math.max(2500, texto.length * 110));
+    u.onstart = () => bolha && bolha.classList.add('tocando');
+    u.onend = fim;
+    u.onerror = fim;
+    speechSynthesis.speak(u);
+  });
+}
+
+/* Bolha de áudio do agente: ▶ + onda + "Aa" (mostra o texto) */
+function criaBolhaAudio(texto) {
+  const b = document.createElement('div');
+  b.className = 'bolha bot';
+
+  const linha = document.createElement('div');
+  linha.className = 'audio-linha';
+
+  const play = document.createElement('button');
+  play.className = 'btn-play';
+  play.textContent = '▶';
+  play.setAttribute('aria-label', 'Ouvir de novo');
+
+  const onda = document.createElement('div');
+  onda.className = 'onda';
+  const alturas = [8, 14, 10, 20, 12, 18, 9, 22, 13, 17, 8, 20, 11, 15, 9, 19, 12, 16, 8, 13];
+  alturas.forEach((h, i) => {
+    const barra = document.createElement('i');
+    barra.style.setProperty('--h', h + 'px');
+    barra.style.setProperty('--i', i);
+    onda.appendChild(barra);
+  });
+
+  const ver = document.createElement('button');
+  ver.className = 'btn-texto';
+  ver.textContent = 'Aa';
+  ver.setAttribute('aria-label', 'Mostrar texto da fala');
+  ver.onclick = () => b.classList.toggle('aberto');
+
+  linha.appendChild(play);
+  linha.appendChild(onda);
+  linha.appendChild(ver);
+
+  const transc = document.createElement('div');
+  transc.className = 'transcricao';
+  transc.textContent = texto;
+
+  b.appendChild(linha);
+  b.appendChild(transc);
+
+  play.onclick = () => {
+    if (b.classList.contains('tocando')) {
+      if (VOZ_OK) speechSynthesis.cancel();
+      b.classList.remove('tocando');
+    } else {
+      falar(texto, b);
+    }
+  };
+  return b;
+}
+
+/* O agente fala: mostra "digitando", cria a bolha de áudio e espera terminar */
+async function say(texto) {
+  const digitando = document.createElement('div');
+  digitando.className = 'digitando';
+  digitando.innerHTML = '<span></span><span></span><span></span>';
+  corpo.appendChild(digitando);
+  scrollFim();
+  await new Promise(r => setTimeout(r, 550 + Math.random() * 300));
+  digitando.remove();
+
+  const bolha = criaBolhaAudio(texto);
+  corpo.appendChild(bolha);
+  scrollFim();
+  await falar(texto, bolha);
+}
+
+function nota(texto) {
+  const n = document.createElement('div');
+  n.className = 'bastidor';
+  n.textContent = '🔍 ' + texto;
+  corpo.appendChild(n);
+  scrollFim();
+}
+
+function bolhaUser(texto, porVoz) {
+  const b = document.createElement('div');
+  b.className = 'bolha user';
+  if (porVoz) {
+    const selo = document.createElement('span');
+    selo.className = 'selo';
+    selo.textContent = '🎤 ÁUDIO';
+    b.appendChild(selo);
+  }
+  b.appendChild(document.createTextNode(texto));
+  corpo.appendChild(b);
+  scrollFim();
+}
+
+/* ============================================================
+   ENTRADA — texto digitado, atalhos (chips) ou voz (microfone)
+   ============================================================ */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let reconhecimento = null;
+let aguardando = null; // { resolve } quando o agente espera a pessoa
+
+function habilitaEntrada(ligado) {
+  campo.disabled = !ligado;
+  btnEnviar.disabled = !ligado;
+  btnMic.disabled = !ligado || !SR;
+  chipsEl.querySelectorAll('.chip').forEach(c => c.disabled = !ligado);
+  if (ligado) campo.focus();
+}
+
+function mostraChips(lista) {
+  chipsEl.innerHTML = '';
+  (lista || []).forEach(txt => {
+    const c = document.createElement('button');
+    c.className = 'chip';
+    c.textContent = txt;
+    c.onclick = () => envia(txt, false);
+    chipsEl.appendChild(c);
+  });
+}
+
+function envia(texto, porVoz) {
+  const valor = (texto || '').trim();
+  if (!valor || !aguardando) return;
+  const { resolve } = aguardando;
+  aguardando = null;
+  pararMic();
+  campo.value = '';
+  campo.placeholder = 'Aguarde a resposta...';
+  mostraChips([]);
+  habilitaEntrada(false);
+  bolhaUser(valor, porVoz);
+  resolve(valor);
+}
+
+/* O agente fala e depois espera a pessoa responder (texto ou voz) */
+function ouvir(chips) {
+  return new Promise(resolve => {
+    aguardando = { resolve };
+    campo.placeholder = SR ? 'Digite ou toque no microfone' : 'Digite sua resposta';
+    mostraChips(chips);
+    habilitaEntrada(true);
+  });
+}
+
+btnEnviar.onclick = () => envia(campo.value, false);
+campo.onkeydown = e => { if (e.key === 'Enter') envia(campo.value, false); };
+
+function pararMic() {
+  if (reconhecimento) {
+    try { reconhecimento.stop(); } catch (e) {}
+    reconhecimento = null;
+  }
+  btnMic.classList.remove('gravando');
+}
+
+btnMic.onclick = () => {
+  if (!SR || !aguardando) return;
+  if (reconhecimento) { pararMic(); return; }
+
+  const r = new SR();
+  r.lang = 'pt-BR';
+  r.interimResults = true;
+  r.continuous = false;
+  let finalTxt = '';
+
+  r.onstart = () => {
+    btnMic.classList.add('gravando');
+    campo.placeholder = 'Ouvindo... pode falar';
+  };
+  r.onresult = ev => {
+    let parcial = '';
+    for (let i = ev.resultIndex; i < ev.results.length; i++) {
+      const t = ev.results[i][0].transcript;
+      if (ev.results[i].isFinal) finalTxt += t; else parcial += t;
+    }
+    campo.value = (finalTxt + parcial).trim();
+  };
+  r.onerror = ev => {
+    btnMic.classList.remove('gravando');
+    if (ev.error === 'not-allowed' || ev.error === 'service-not-allowed') {
+      avisoRodape.textContent = 'Permita o acesso ao microfone no navegador, ou digite sua resposta.';
+    } else if (ev.error === 'no-speech') {
+      campo.placeholder = 'Não ouvi nada. Toque no 🎤 e tente de novo.';
+    }
+  };
+  r.onend = () => {
+    reconhecimento = null;
+    btnMic.classList.remove('gravando');
+    if (finalTxt.trim() && aguardando) envia(finalTxt, true);
+    else if (aguardando) campo.placeholder = 'Digite ou toque no microfone';
+  };
+
+  reconhecimento = r;
+  try { r.start(); } catch (e) { reconhecimento = null; }
+};
+
+if (!SR) {
+  avisoRodape.textContent = 'Este navegador não captura voz — digite sua resposta. O agente continua respondendo em áudio.';
+}
+
+/* ============================================================
+   ENTENDIMENTO — transforma o que a pessoa disse em intenção
+   (serve tanto pra voz quanto pra texto, e para os atalhos)
+   ============================================================ */
+function norm(t) {
+  return t.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+
+function detectaIntencao(texto) {
+  const t = norm(texto);
+  if (/terminar|chega|ja vi|encerrar|finalizar|so isso|^(nao|nada)\b/.test(t)) return 'fim';
+  if (/reagend|remarc|cancel/.test(t)) return 'ajustar';
+  if (/orcament|quanto custa|quanto fica|valor|preco/.test(t)) return 'orcamento';
+  if (/promo|desconto|novidade|oferta/.test(t)) return 'promocoes';
+  if (/agend|marcar|reserv|marcacao/.test(t)) return 'agendar';
+  if (/pedido|pedir|comprar|encomend/.test(t)) return 'pedido';
+  if (/duvida|endereco|funciona|abre|pagamento|pergunt/.test(t)) return 'duvida';
+  if (/produto|servico|catalogo|cardapio|o que (voces )?(tem|vendem|fazem)/.test(t)) return 'catalogo';
+  return null;
+}
+
+function extraiNome(texto) {
+  let t = texto.trim()
+    .replace(/^(oi|ol[aá]|bom dia|boa tarde|boa noite)[,!.\s]*/i, '')
+    .replace(/^(meu nome (é|e)|me chamo|eu sou|sou (o|a)|aqui (é|e) (o|a)|pode me chamar de)\s+/i, '');
+  const primeiro = t.split(/[\s,.!?]+/)[0] || texto.trim().split(/\s+/)[0];
+  return primeiro.charAt(0).toUpperCase() + primeiro.slice(1);
+}
+
+const NUMEROS = { zero:0, um:1, uma:1, dois:2, duas:2, tres:3, quatro:4, cinco:5, seis:6, sete:7, oito:8, nove:9 };
+const DEZENAS = { dez:10, onze:11, doze:12, treze:13, catorze:14, quatorze:14, quinze:15, dezesseis:16,
+  dezessete:17, dezoito:18, dezenove:19, vinte:20, trinta:30, quarenta:40, cinquenta:50,
+  sessenta:60, setenta:70, oitenta:80, noventa:90 };
+
+/* Aceita dígitos ("48 99999-1234") ou número falado ("quarenta e oito nove nove...") */
+function extraiTelefone(texto) {
+  const direto = texto.replace(/\D/g, '');
+  if (direto.length >= 10) return direto;
+  const p = norm(texto).split(/[\s,.-]+/).filter(Boolean);
+  let saida = '';
+  for (let i = 0; i < p.length; i++) {
+    const w = p[i];
+    if (w in DEZENAS) {
+      if (DEZENAS[w] >= 20 && p[i + 1] === 'e' && p[i + 2] in NUMEROS && NUMEROS[p[i + 2]] > 0) {
+        saida += String(DEZENAS[w] + NUMEROS[p[i + 2]]); i += 2;
+      } else {
+        saida += String(DEZENAS[w]);
+      }
+    } else if (w in NUMEROS) {
+      saida += String(NUMEROS[w]);
+    } else if (/^\d+$/.test(w)) {
+      saida += w;
+    }
+  }
+  return saida;
+}
+
+/* ============================================================
+   OS 7 MENUS — mesma jornada do demo em texto, agora por voz
+   ============================================================ */
+async function perguntaDiaPeriodo(pergunta) {
+  await say(pergunta);
+  return await ouvir(['Sem preferência', 'Terça de manhã', 'Sexta à tarde']);
+}
+
+async function roteiroCatalogo() {
+  await say(`Claro, ${lead.nome}! Você quer ver produtos, serviços ou os mais pedidos?`);
+  await ouvir(['Produtos', 'Serviços', 'Os mais pedidos']);
+  await say('Separei aqui pra você. O item mais pedido sai a partir de vinte e nove e noventa. A novidade da semana, a partir de quarenta e nove e noventa. E temos uma opção completa, sob consulta.');
+  nota('o agente apresenta o catálogo real do seu negócio, com preços e disponibilidade, e acompanha quando você muda algo.');
+}
+
+async function roteiroPedido() {
+  await say(`Vamos lá, ${lead.nome}! O que você gostaria de pedir?`);
+  const item = await ouvir(['Duas unidades do mais pedido']);
+  await say('Anotado! Será retirada ou entrega?');
+  const entrega = /entreg/.test(norm(await ouvir(['Retirada no local', 'Entrega']))) ? 'entrega' : 'retirada no local';
+  await say('E a forma de pagamento?');
+  const pagamento = await ouvir(['Pix', 'Cartão', 'Dinheiro']);
+  await say(`Pedido anotado, ${lead.nome}: ${item}, com ${entrega}, pagamento ${pagamento}. Já avisei a equipe.`);
+  nota('o pedido chega organizado e completo para a equipe — ninguém precisa anotar à mão nem pedir tudo de novo.');
+}
+
+async function roteiroAgendar() {
+  await say(`Perfeito, ${lead.nome}! Qual serviço você quer agendar?`);
+  const servico = await ouvir(['Corte', 'Consulta', 'Revisão']);
+  const dia = await perguntaDiaPeriodo('Você tem preferência de dia e período, ou tanto faz?');
+  await say(`Agendamento solicitado, ${lead.nome}: ${servico}, ${dia.toLowerCase()}. A equipe confirma o horário em instantes.`);
+  nota('esse pedido cai direto no painel da equipe, que só precisa confirmar o horário.');
+  await say('E um detalhe: dois dias antes, eu mesmo te mando uma mensagem perguntando se continua tudo certo.');
+  nota('isso reduz muito as faltas sem aviso — tudo automático, sem ninguém ligar pra confirmar um por um.');
+}
+
+async function roteiroOrcamento() {
+  await say(`Claro, ${lead.nome}! Me conta rapidinho o que você precisa.`);
+  const pedido = await ouvir();
+  await say('Entendi! E qual o seu prazo?');
+  const prazo = await ouvir(['Urgente', 'Esta semana', 'Sem pressa']);
+  await say(`Recebi, ${lead.nome}! Orçamento para ${pedido}, prazo: ${prazo.toLowerCase()}. A equipe te responde com os valores, sem perguntar tudo de novo.`);
+  nota('a equipe recebe o pedido já resumido e responde com valores.');
+}
+
+async function roteiroPromocoes() {
+  await say(`Tenho novidade boa pra você, ${lead.nome}! ${CONFIG.exemplo.promocao}, válida até domingo. Quer receber as próximas promoções aqui no WhatsApp?`);
+  const r = await ouvir(['Quero receber', 'Agora não']);
+  if (/\bnao\b|agora n/.test(norm(r))) {
+    await say('Sem problema! Fico por aqui quando você precisar.');
+  } else {
+    await say(`Combinado, ${lead.nome}! Te aviso assim que surgir algo bom.`);
+  }
+  nota('o agente avisa clientes sobre promoções, aniversários e retornos — sem disparo manual e sem planilha.');
+}
+
+async function roteiroAjustar() {
+  await say(`Sem problema, ${lead.nome}! Você quer reagendar ou cancelar?`);
+  const acao = await ouvir(['Reagendar', 'Cancelar']);
+  if (/cancel/.test(norm(acao))) {
+    const atual = await perguntaDiaPeriodo('Qual o dia e período do atendimento que você quer cancelar?');
+    await say(`Cancelamento solicitado, ${lead.nome}: atendimento de ${atual.toLowerCase()}. Já avisei a equipe.`);
+  } else {
+    const novo = await perguntaDiaPeriodo('Para qual novo dia e período você quer reagendar, ou tanto faz?');
+    await say(`Reagendamento solicitado, ${lead.nome}: ${novo.toLowerCase()}. A equipe confirma em instantes.`);
+  }
+  nota('o horário liberado volta pra agenda na hora, e o agente chama alguém da equipe quando precisa — sem ligação.');
+}
+
+function respondeDuvida(texto) {
+  const t = norm(texto);
+  if (/endere|onde fica|local/.test(t)) return `Nosso endereço é ${CONFIG.exemplo.endereco}.`;
+  if (/hor|funciona|abre|fecha/.test(t)) return `Atendemos ${CONFIG.exemplo.horario}.`;
+  if (/pag|pix|cart|dinheiro/.test(t)) return `Aceitamos ${CONFIG.exemplo.pagamentos}.`;
+  return null;
+}
+
+async function roteiroDuvida() {
+  await say('Pode perguntar! Endereço, horário, formas de pagamento...');
+  const texto = await ouvir(['Qual o endereço?', 'Que horas vocês abrem?', 'Aceitam Pix?']);
+  const resposta = respondeDuvida(texto);
+  if (resposta) {
+    await say(resposta);
+    nota('o agente responde na hora o que já sabe sobre o seu negócio, a qualquer hora do dia.');
+  } else {
+    await say(`Boa pergunta, ${lead.nome}! Vou chamar alguém da equipe pra te responder, tudo bem?`);
+    nota('perguntas fora do que o agente sabe responder com segurança vão direto pra equipe — ninguém fica esperando no vazio.');
+  }
+}
+
+const MENUS = [
+  { id: 'catalogo',   rotulo: '🛍️ Ver produtos ou serviços', roteiro: roteiroCatalogo },
+  { id: 'pedido',     rotulo: '🛒 Fazer um pedido',          roteiro: roteiroPedido },
+  { id: 'agendar',    rotulo: '📅 Agendar um horário',       roteiro: roteiroAgendar },
+  { id: 'orcamento',  rotulo: '💬 Pedir um orçamento',       roteiro: roteiroOrcamento },
+  { id: 'promocoes',  rotulo: '🎁 Promoções e novidades',    roteiro: roteiroPromocoes },
+  { id: 'ajustar',    rotulo: '🔄 Reagendar ou cancelar',    roteiro: roteiroAjustar },
+  { id: 'duvida',     rotulo: '❓ Tirar uma dúvida',         roteiro: roteiroDuvida },
+];
+
+const visitados = new Set();
+
+async function menuLoop() {
+  while (visitados.size < MENUS.length) {
+    const chips = MENUS.filter(m => !visitados.has(m.id)).map(m => m.rotulo);
+    if (visitados.size > 0) chips.push('✅ Terminar');
+
+    const fala = await ouvir(chips);
+    const id = detectaIntencao(fala);
+
+    if (id === 'fim') return;
+    if (!id) {
+      await say(`Não entendi bem, ${lead.nome}. Você pode dizer, por exemplo: ver produtos, fazer um pedido ou agendar um horário.`);
+      continue;
+    }
+    if (visitados.has(id)) {
+      await say('Essa você já viu! Escolhe outra função pra testar.');
+      continue;
+    }
+
+    visitados.add(id);
+    await MENUS.find(m => m.id === id).roteiro();
+
+    if (visitados.size < MENUS.length) {
+      await say(`Quer testar mais alguma função, ${lead.nome}? Se já viu o suficiente, é só dizer terminar.`);
+    }
+  }
+}
+
+/* ============================================================
+   FECHAMENTO — nome já conhecido: pede só WhatsApp e negócio
+   ============================================================ */
+function mostraCtaFinal() {
+  rodape.innerHTML = '';
+  const btn = document.createElement('button');
+  btn.className = 'cta-final';
+  btn.textContent = '📅 Marcar uma conversa rápida';
+  btn.onclick = () => {
+    const msg = `Olá! Testei a demo do agente por voz e quero saber mais.\nNome: ${lead.nome}\nWhatsApp: ${lead.telefone}\nNegócio: ${lead.negocio}`;
+    window.open(`https://wa.me/${CONFIG.whatsappDestino}?text=${encodeURIComponent(msg)}`, '_blank');
+  };
+  rodape.appendChild(btn);
+  const aviso = document.createElement('div');
+  aviso.className = 'aviso-demo';
+  aviso.textContent = 'Isto é uma demonstração — nenhum dado real foi agendado.';
+  rodape.appendChild(aviso);
+}
+
+async function fechamento() {
+  await say(`Isso foi só uma prévia, ${lead.nome}: seus clientes seriam atendidos assim, todo dia, a qualquer hora, sem fila.`);
+  await say('Quer ver isso rodando no seu negócio? Me passa só mais dois dados. Qual o melhor WhatsApp pra te chamar?');
+
+  let telefone = extraiTelefone(await ouvir());
+  while (telefone.length < 10) {
+    await say('Não consegui entender o número. Pode digitar ele pra mim, com o DDD?');
+    telefone = extraiTelefone(await ouvir());
+  }
+  lead.telefone = telefone;
+  await say(`Anotei o número ${telefone.split('').join(' ')}.`);
+
+  await say('E que tipo de negócio você tem?');
+  const tipo = await ouvir(['Comércio local', 'Clínica ou consultório', 'Loja de varejo', 'Pastelaria ou alimentação', 'Prestador de serviços', 'Outro']);
+  if (norm(tipo) === 'outro') {
+    await say('Qual é o seu ramo?');
+    lead.negocio = await ouvir();
+  } else {
+    lead.negocio = tipo;
+  }
+
+  await say(`Perfeito, ${lead.nome}! Vou te mostrar como isso funcionaria no seu negócio, ${lead.negocio}.`);
+  await say('Bora marcar uma conversa rápida de quinze minutos?');
+  mostraCtaFinal();
+}
+
+/* ============================================================
+   INÍCIO — cumprimenta e pergunta o nome (por áudio)
+   ============================================================ */
+async function iniciar() {
+  await say('Olá! Que bom ter você por aqui.');
+  await say('Antes de começar: qual é o seu nome?');
+
+  lead.nome = extraiNome(await ouvir());
+
+  await say(`Prazer, ${lead.nome}! Vou te mostrar como eu atenderia os clientes de qualquer negócio. Você pode falar ou digitar, e eu respondo sempre em áudio.`);
+  await say('Escolhe uma opção pra testar, ou me diz o que você precisa.');
+  await menuLoop();
+  await fechamento();
+}
+
+document.getElementById('btnIniciar').onclick = () => {
+  document.getElementById('inicio').remove();
+  // toque do usuário libera o áudio do navegador
+  if (VOZ_OK) speechSynthesis.cancel();
+  iniciar();
+};
+</script>
+
+</body>
+</html>
